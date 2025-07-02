@@ -630,13 +630,17 @@ def get_leaderboards():
                 })
 
         # Fetch top upvoted tricks
-        tricks = Trick.query.order_by(func.count(TrickUpvote.id).desc()).limit(10).all()
+        tricks = db.session.query(
+            Trick.id,
+            Trick.title,
+            func.count(TrickUpvote.id).label('upvote_count')
+        ).join(TrickUpvote, Trick.id == TrickUpvote.trick_id, isouter=True).group_by(Trick.id).order_by(func.count(TrickUpvote.id).desc()).limit(10).all()
+
         for trick in tricks:
-            upvote_count = len(trick.upvotes)
             top_upvoted_tricks.append({
                 'id': trick.id,
                 'title': trick.title,
-                'upvote_count': upvote_count
+                'upvote_count': trick.upvote_count
             })
 
         # Sort and limit results
