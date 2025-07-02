@@ -1,0 +1,13 @@
+flask
+flask-cors
+flask-bcrypt
+pyjwt
+flask-sqlalchemy
+gunicorn
+python-dotenv
+psycopg2-binary
+flask-mail
+itsdangerous
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
