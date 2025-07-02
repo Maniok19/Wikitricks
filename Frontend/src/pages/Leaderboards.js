@@ -123,7 +123,7 @@ const Leaderboards = () => {
     topic_contributors: [],
     commenters: [],
     forum_participants: [],
-    skatepark_contributors: []
+    top_upvoted_tricks: [] // Ensure this matches the backend response
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -155,19 +155,19 @@ const Leaderboards = () => {
         <EmptyState>No data available yet</EmptyState>
       ) : (
         <LeaderboardList>
-          {data.map((user, index) => (
-            <LeaderboardItem key={user.user_id} $rank={index + 1}>
+          {data.map((item, index) => (
+            <LeaderboardItem key={item.id || item.user_id} $rank={index + 1}>
               <UserInfo>
                 <RankBadge $rank={index + 1}>
                   {index + 1}
                 </RankBadge>
                 <UserDetails>
-                  <h4>{user.username}</h4>
-                  {user.region && <p>{user.region}</p>}
+                  <h4>{item.username || item.title}</h4>
+                  {item.region && <p>{item.region}</p>}
                 </UserDetails>
               </UserInfo>
               <ScoreBadge>
-                {user.count} {scoreLabel}
+                {item.count || item.upvote_count} {scoreLabel}
               </ScoreBadge>
             </LeaderboardItem>
           ))}
@@ -226,10 +226,10 @@ const Leaderboards = () => {
         />
         
         <LeaderboardSection
-          title="Skatepark Contributors"
-          data={leaderboards.skatepark_contributors}
-          scoreLabel="spots"
-          icon="📍"
+          title="Top Upvoted Tricks"
+          data={leaderboards.top_upvoted_tricks}
+          scoreLabel="upvotes"
+          icon="🔥"
         />
       </LeaderboardsGrid>
     </LeaderboardsWrapper>

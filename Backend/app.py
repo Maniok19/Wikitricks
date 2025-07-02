@@ -579,22 +579,17 @@ def google_auth():
 @app.route('/leaderboards', methods=['GET'])
 def get_leaderboards():
     try:
-        # Simple approach: Get all users first, then count their contributions
-        users = User.query.all()
-        
         trick_contributors = []
         topic_contributors = []
         commenters = []
         forum_participants = []
-        skatepark_contributors = []
-        
+        top_upvoted_tricks = []
+
+        users = User.query.all()
+
         for user in users:
-            # Count tricks (if Trick model has user_id or creator relationship)
-            trick_count = db.session.query(func.count(Trick.id)).filter(
-                hasattr(Trick, 'user_id') and Trick.user_id == user.id or 
-                hasattr(Trick, 'creator_id') and Trick.creator_id == user.id
-            ).scalar() or 0
-            
+            # Count tricks
+            trick_count = db.session.query(func.count(Trick.id)).filter(Trick.user_id == user.id).scalar() or 0
             if trick_count > 0:
                 trick_contributors.append({
                     'user_id': user.id,
@@ -602,69 +597,64 @@ def get_leaderboards():
                     'region': getattr(user, 'region', None),
                     'count': trick_count
                 })
-            
+
             # Count forum topics
-            if hasattr(ForumTopic, 'user_id'):
-                topic_count = db.session.query(func.count(ForumTopic.id)).filter(ForumTopic.user_id == user.id).scalar() or 0
-                if topic_count > 0:
-                    topic_contributors.append({
-                        'user_id': user.id,
-                        'username': user.username,
-                        'region': getattr(user, 'region', None),
-                        'count': topic_count
-                    })
-            
+            topic_count = db.session.query(func.count(ForumTopic.id)).filter(ForumTopic.user_id == user.id).scalar() or 0
+            if topic_count > 0:
+                topic_contributors.append({
+                    'user_id': user.id,
+                    'username': user.username,
+                    'region': getattr(user, 'region', None),
+                    'count': topic_count
+                })
+
             # Count comments
-            if hasattr(Comment, 'user_id'):
-                comment_count = db.session.query(func.count(Comment.id)).filter(Comment.user_id == user.id).scalar() or 0
-                if comment_count > 0:
-                    commenters.append({
-                        'user_id': user.id,
-                        'username': user.username,
-                        'region': getattr(user, 'region', None),
-                        'count': comment_count
-                    })
-            
+            comment_count = db.session.query(func.count(Comment.id)).filter(Comment.user_id == user.id).scalar() or 0
+            if comment_count > 0:
+                commenters.append({
+                    'user_id': user.id,
+                    'username': user.username,
+                    'region': getattr(user, 'region', None),
+                    'count': comment_count
+                })
+
             # Count forum replies
-            if hasattr(ForumReply, 'user_id'):
-                reply_count = db.session.query(func.count(ForumReply.id)).filter(ForumReply.user_id == user.id).scalar() or 0
-                total_forum_activity = (topic_count if hasattr(ForumTopic, 'user_id') else 0) + reply_count
-                if total_forum_activity > 0:
-                    forum_participants.append({
-                        'user_id': user.id,
-                        'username': user.username,
-                        'region': getattr(user, 'region', None),
-                        'count': total_forum_activity
-                    })
-            
-            # Count skateparks
-            if hasattr(Skatepark, 'user_id'):
-                skatepark_count = db.session.query(func.count(Skatepark.id)).filter(Skatepark.user_id == user.id).scalar() or 0
-                if skatepark_count > 0:
-                    skatepark_contributors.append({
-                        'user_id': user.id,
-                        'username': user.username,
-                        'region': getattr(user, 'region', None),
-                        'count': skatepark_count
-                    })
-        
+            reply_count = db.session.query(func.count(ForumReply.id)).filter(ForumReply.user_id == user.id).scalar() or 0
+            total_forum_activity = topic_count + reply_count
+            if total_forum_activity > 0:
+                forum_participants.append({
+                    'user_id': user.id,
+                    'username': user.username,
+                    'region': getattr(user, 'region', None),
+                    'count': total_forum_activity
+                })
+
+        # Fetch top upvoted tricks
+        tricks = Trick.query.order_by(func.count(TrickUpvote.id).desc()).limit(10).all()
+        for trick in tricks:
+            upvote_count = len(trick.upvotes)
+            top_upvoted_tricks.append({
+                'id': trick.id,
+                'title': trick.title,
+                'upvote_count': upvote_count
+            })
+
         # Sort and limit results
         trick_contributors.sort(key=lambda x: x['count'], reverse=True)
         topic_contributors.sort(key=lambda x: x['count'], reverse=True)
         commenters.sort(key=lambda x: x['count'], reverse=True)
         forum_participants.sort(key=lambda x: x['count'], reverse=True)
-        skatepark_contributors.sort(key=lambda x: x['count'], reverse=True)
-        
+
         return jsonify({
             'trick_contributors': trick_contributors[:10],
             'topic_contributors': topic_contributors[:10],
             'commenters': commenters[:10],
             'forum_participants': forum_participants[:10],
-            'skatepark_contributors': skatepark_contributors[:10]
+            'top_upvoted_tricks': top_upvoted_tricks
         })
-        
+
     except Exception as e:
-        print(f"Leaderboards error: {str(e)}")  # For debugging
+        print(f"Leaderboards error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # Trick upvote routes
