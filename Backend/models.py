@@ -13,6 +13,9 @@ class Trick(db.Model):
     video_url = db.Column(db.String(255), nullable=False)
     difficulty = db.Column(db.String(50), nullable=False, default='beginner')
     created = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Add this line
+
+    user = db.relationship('User', backref='tricks')  # Add this line
 
     def to_dict(self):
         return {
@@ -22,7 +25,8 @@ class Trick(db.Model):
             'video_url': self.video_url,
             'difficulty': self.difficulty,
             'created': self.created.isoformat(),
-            'upvote_count': len(self.upvotes)  # Add this line
+            'upvote_count': len(self.upvotes),
+            'user_id': self.user_id  # Add this line
         }
 
 class User(db.Model):

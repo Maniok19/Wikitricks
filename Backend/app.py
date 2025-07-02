@@ -106,26 +106,31 @@ Ce lien expire dans 24 heures.
         return False
 
 @app.route('/create-trick', methods=['POST'])
+@token_required
 def create_trick():
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 400
-    
+
     data = request.json
-    required_fields = ['name', 'description', 'videoUrl', 'difficulty']  # Add difficulty
-    
+    required_fields = ['name', 'description', 'videoUrl', 'difficulty']
+
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
-        
+
     try:
+        token = request.headers.get('Authorization').split()[1]
+        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+
         new_trick = Trick(
             title=data['name'],
             description=data['description'],
             video_url=data['videoUrl'],
-            difficulty=data['difficulty']  # Add this line
+            difficulty=data['difficulty'],
+            user_id=user_data['user_id']  # Add user_id here
         )
         db.session.add(new_trick)
         db.session.commit()
-        
+
         return jsonify({
             "message": "Trick created successfully",
             "id": new_trick.id
