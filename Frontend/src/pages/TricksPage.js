@@ -111,6 +111,10 @@ const TricksPage = () => {
     return () => clearTimeout(debounceTimer);
   }, [searchQuery]);
 
+  const handleTrickDelete = (trickId) => {
+    setTricks(tricks.filter(trick => trick.id !== trickId));
+  };
+
   return (
     <TricksWrapper>
       <HeaderSection>
@@ -136,7 +140,15 @@ const TricksPage = () => {
             </p>
           </Card>
         ) : (
-          <TrickList tricks={tricks} />
+          <div className="trick-list">
+            {tricks.map(trick => (
+              <TrickCard 
+                key={trick.id} 
+                trick={trick} 
+                onTrickDelete={handleTrickDelete}
+              />
+            ))}
+          </div>
         )
       )}
     </TricksWrapper>

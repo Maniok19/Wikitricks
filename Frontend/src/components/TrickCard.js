@@ -3,6 +3,8 @@ import React from 'react';
 import styled from 'styled-components';
 import { Link } from 'react-router-dom';
 import UpvoteButton from './UpvoteButton';
+import { useAuth } from '../contexts/AuthContext';
+import axiosInstance from '../utils/axios';
 
 const Card = styled(Link)`
   display: block;
@@ -165,7 +167,31 @@ const CardFooter = styled.div`
   border-top: 1px solid var(--border-light);
 `;
 
-const TrickCard = ({ trick }) => {
+const AdminControls = styled.div`
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const AdminButton = styled.button`
+  background: var(--btn-danger);
+  color: white;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.3s ease;
+
+  &:hover {
+    background: var(--btn-danger-hover);
+  }
+`;
+
+const TrickCard = ({ trick, onTrickDelete }) => {
+  const { user } = useAuth();
   const isYouTubeUrl = trick.video_url.includes('youtube.com/embed/');
 
   const getDifficultyText = (difficulty) => {
@@ -178,8 +204,31 @@ const TrickCard = ({ trick }) => {
     }
   };
 
+  const handleDeleteTrick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!window.confirm('Are you sure you want to delete this trick?')) return;
+    
+    try {
+      await axiosInstance.delete(`/admin/tricks/${trick.id}`);
+      if (onTrickDelete) onTrickDelete(trick.id);
+    } catch (err) {
+      console.error('Failed to delete trick:', err);
+      alert('Failed to delete trick');
+    }
+  };
+
   return (
     <Card to={`/trick/${trick.id}`} className="card">
+      {user && user.is_admin && (
+        <AdminControls>
+          <AdminButton onClick={handleDeleteTrick}>
+            Delete
+          </AdminButton>
+        </AdminControls>
+      )}
+      
       <TrickTitle className="graffiti-text">
         <span>
           <SkateIcon>🛹</SkateIcon>

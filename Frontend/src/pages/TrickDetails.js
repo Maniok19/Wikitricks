@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import axiosInstance from '../utils/axios';
 import CommentList from '../components/CommentList';
@@ -9,6 +9,7 @@ import {
   LoadingMessage, 
   ErrorMessage 
 } from '../components/shared/StyledComponents';
+import { useAuth } from '../context/AuthContext';
 
 const TrickDetailsWrapper = styled(PageWrapper)`
   max-width: 800px;
@@ -118,12 +119,36 @@ const CommentsSection = styled.section`
   }
 `;
 
+const AdminControls = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1rem;
+`;
+
+const AdminButton = styled.button`
+  background: var(--btn-danger);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.3s ease;
+
+  &:hover {
+    background: var(--btn-danger-hover);
+  }
+`;
+
 const TrickDetails = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [trick, setTrick] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [comments, setComments] = useState([]);
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchTrick = async () => {
@@ -161,6 +186,22 @@ const TrickDetails = () => {
     } catch (err) {
       console.error('Failed to post comment:', err);
     }
+  };
+
+  const handleDeleteTrick = async () => {
+    if (!window.confirm('Are you sure you want to delete this trick?')) return;
+    
+    try {
+      await axiosInstance.delete(`/admin/tricks/${id}`);
+      navigate('/tricks');
+    } catch (err) {
+      console.error('Failed to delete trick:', err);
+      alert('Failed to delete trick');
+    }
+  };
+
+  const handleCommentDelete = (commentId) => {
+    setComments(comments.filter(comment => comment.id !== commentId));
   };
 
   if (loading) {
@@ -209,9 +250,17 @@ const TrickDetails = () => {
         )}
       </TrickMeta>
 
+      {user && user.is_admin && (
+        <AdminControls>
+          <AdminButton onClick={handleDeleteTrick}>
+            Delete Trick
+          </AdminButton>
+        </AdminControls>
+      )}
+
       <CommentsSection>
         <CommentForm onSubmit={handleCommentSubmit} />
-        <CommentList comments={comments} />
+        <CommentList comments={comments} onCommentDelete={handleCommentDelete} />
       </CommentsSection>
     </TrickDetailsWrapper>
   );
