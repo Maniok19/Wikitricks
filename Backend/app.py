@@ -793,3 +793,70 @@ def get_reply_upvote_status(reply_id):
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    data = request.json
+    if not data or not data.get('email'):
+        return jsonify({'error': 'Email is required'}), 400
+    
+    try:
+        user = User.query.filter_by(email=data['email']).first()
+        if not user:
+            # Don't reveal if email exists for security
+            return jsonify({'message': 'If this email exists, you will receive a password reset link'}), 200
+        
+        # Generate reset token
+        reset_token = serializer.dumps(user.email, salt='password-reset')
+        
+        # Send reset email
+        send_password_reset_email(user.email, reset_token)
+        
+        return jsonify({'message': 'If this email exists, you will receive a password reset link'}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/reset-password/<token>', methods=['POST'])
+def reset_password(token):
+    data = request.json
+    if not data or not data.get('password'):
+        return jsonify({'error': 'Password is required'}), 400
+    
+    try:
+        # Verify token (valid for 1 hour)
+        email = serializer.loads(token, salt='password-reset', max_age=3600)
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            return jsonify({'error': 'Invalid reset link'}), 404
+        
+        # Update password
+        user.password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+        db.session.commit()
+        
+        return jsonify({'message': 'Password reset successfully'}), 200
+        
+    except Exception as e:
+        return jsonify({'error': 'Invalid or expired reset link'}), 400
+
+def send_password_reset_email(email, token):
+    try:
+        reset_url = f"{os.environ.get('FRONTEND_URL')}/reset-password/{token}"
+        msg = Message('WikiTricks Password Reset',
+                    sender=app.config['MAIL_DEFAULT_SENDER'],
+                    recipients=[email])
+        msg.body = f'''To reset your WikiTricks password, click the link below:
+
+{reset_url}
+
+This link will expire in 1 hour.
+
+If you didn't request this password reset, please ignore this email.
+'''
+        mail.send(msg)
+        print(f"Password reset email sent successfully to {email}")
+        return True
+    except Exception as e:
+        print(f"Failed to send password reset email: {str(e)}")
+        return False

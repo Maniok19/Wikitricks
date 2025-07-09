@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import axiosInstance from '../utils/axios';
 import GoogleLogin from './GoogleLogin';
 import {
@@ -32,6 +32,19 @@ const Divider = styled.div`
     padding: 0 1rem;
     color: var(--text-muted);
     font-size: 0.875rem;
+  }
+`;
+
+const ForgotPasswordLink = styled(Link)`
+  display: block;
+  text-align: center;
+  color: var(--btn-primary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  margin-top: 1rem;
+  
+  &:hover {
+    text-decoration: underline;
   }
 `;
 
@@ -108,6 +121,10 @@ const Login = () => {
           >
             {loading ? 'LOGGING IN...' : 'LOGIN'}
           </Button>
+          
+          <ForgotPasswordLink to="/forgot-password">
+            Forgot your password?
+          </ForgotPasswordLink>
         </form>
       </FormContainer>
     </PageWrapper>

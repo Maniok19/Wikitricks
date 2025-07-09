@@ -1,8 +1,8 @@
 from app import app, db
-from models import Trick, User, ForumTopic
+from models import Trick, User, ForumTopic, Skatepark  # Ensure Skatepark is imported
 
 def populate_data():
-    """Populate the database with sample data including tricks, a user, and forum topics."""
+    """Populate the database with sample data including tricks, a user, forum topics, and skateparks."""
     
     # Create a sample user
     sample_user = User(
@@ -132,7 +132,7 @@ def populate_data():
     sample_topics = [
         {
             'title': 'Bugs and Issues',
-            'description': 'Share your favorite beginner tricks and tips for mastering them.',
+            'description': 'Tell me if anything look wrong or not working properly',
             'user_id': sample_user.id
         },
         {
@@ -143,11 +143,24 @@ def populate_data():
         # Add other topics here...
     ]
     
+    # Sample skateparks
+    sample_skateparks = [
+        {
+            'name': 'Old Aqualand Skatepark',
+            'address': 'Unknown Address',
+            'description': 'A historic skatepark known for its unique design and challenging obstacles.',
+            'lat': 44.38763925589657,
+            'lng': 4.653356016357305,
+            'created_by': sample_user.id
+        }
+    ]
+    
     with app.app_context():
         # Clear existing data (optional - remove this if you want to keep existing data)
         print("Clearing existing tricks and topics...")
         Trick.query.delete()
         ForumTopic.query.delete()
+        Skatepark.query.delete()
         
         # Add new tricks
         print("Adding sample tricks...")
@@ -171,9 +184,22 @@ def populate_data():
             )
             db.session.add(topic)
         
+        # Add new skateparks
+        print("Adding sample skateparks...")
+        for skatepark_data in sample_skateparks:
+            skatepark = Skatepark(
+                name=skatepark_data['name'],
+                address=skatepark_data['address'],
+                description=skatepark_data['description'],
+                lat=skatepark_data['lat'],
+                lng=skatepark_data['lng'],
+                created_by=skatepark_data['created_by']
+            )
+            db.session.add(skatepark)
+        
         try:
             db.session.commit()
-            print(f"Successfully added {len(sample_tricks)} tricks and {len(sample_topics)} topics to the database!")
+            print(f"Successfully added {len(sample_tricks)} tricks, {len(sample_topics)} topics, and {len(sample_skateparks)} skateparks to the database!")
         except Exception as e:
             db.session.rollback()
             print(f"Error adding data: {e}")

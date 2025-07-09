@@ -18,6 +18,8 @@ import SkatePark from './pages/SkatePark';
 import CreateSkatepark from './components/CreateSkatepark';
 import TricksPage from './pages/TricksPage';
 import Leaderboards from './pages/Leaderboards';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
 
 const AppContent = () => {
   const { isDarkMode } = useTheme();
@@ -44,6 +46,8 @@ const AppContent = () => {
               <Route path="/skateparks" element={<SkatePark />} />
               <Route path="/create-skatepark" element={<CreateSkatepark />} />
               <Route path="/leaderboards" element={<Leaderboards />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password/:token" element={<ResetPassword />} />
             </Routes>
           </main>
         </div>
@@ -75,6 +79,8 @@ function App() {
               <Route path="/skateparks" element={<SkatePark />} />
               <Route path="/create-skatepark" element={<CreateSkatepark />} />
               <Route path="/leaderboards" element={<Leaderboards />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password/:token" element={<ResetPassword />} />
             </Routes>
           </div>
         </Router>
