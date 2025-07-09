@@ -44,7 +44,9 @@ app = Flask(__name__)
 CORS(app, 
     origins=[
         'https://wikitricks.netlify.app',
-        'http://localhost:3000' if os.environ.get('FLASK_ENV') == 'development' else None
+        'http://localhost:3000'
+    ] if os.environ.get('FLASK_ENV') == 'development' else [
+        'https://wikitricks.netlify.app'
     ],
     supports_credentials=True,
     methods=['GET', 'POST', 'PUT', 'DELETE'],
