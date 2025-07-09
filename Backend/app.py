@@ -1042,6 +1042,22 @@ def admin_dashboard():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/user/me', methods=['GET'])
+@token_required
+def get_current_user():
+    try:
+        token = request.headers.get('Authorization').split()[1]
+        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        user = User.query.get(user_data['user_id'])
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+            
+        return jsonify(user.to_dict()), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -211,11 +211,24 @@ const TrickCard = ({ trick, onTrickDelete }) => {
     if (!window.confirm('Are you sure you want to delete this trick?')) return;
     
     try {
-      await axiosInstance.delete(`/admin/tricks/${trick.id}`);
-      if (onTrickDelete) onTrickDelete(trick.id);
+      const token = localStorage.getItem('token');
+      const response = await axiosInstance.delete(`/admin/tricks/${trick.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.status === 200) {
+        if (onTrickDelete) onTrickDelete(trick.id);
+        alert('Trick deleted successfully');
+      }
     } catch (err) {
       console.error('Failed to delete trick:', err);
-      alert('Failed to delete trick');
+      if (err.response?.status === 403) {
+        alert('You need admin privileges to delete tricks');
+      } else {
+        alert('Failed to delete trick: ' + (err.response?.data?.error || err.message));
+      }
     }
   };
 
