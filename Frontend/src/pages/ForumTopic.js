@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
 import axiosInstance from '../utils/axios';
@@ -108,13 +108,39 @@ const ReplyCard = styled(Card)`
   }
 `;
 
+const ReplyHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+`;
+
 const ReplyMeta = styled.div`
   color: var(--text-muted);
   font-size: 0.875rem;
-  margin-bottom: 0.5rem;
   font-family: var(--font-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+`;
+
+const AdminControls = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const AdminButton = styled.button`
+  background: var(--btn-danger);
+  color: white;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.3s ease;
+
+  &:hover {
+    background: var(--btn-danger-hover);
+  }
 `;
 
 const ReplyContent = styled.p`
@@ -205,6 +231,7 @@ const ReplyFooter = styled.div`
 const ForumTopic = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [topic, setTopic] = useState(null);
   const [replies, setReplies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -250,6 +277,28 @@ const ForumTopic = () => {
     }
   };
 
+  const handleDeleteTopic = async () => {
+    if (!window.confirm('Are you sure you want to delete this topic?')) return;
+    
+    try {
+      await axiosInstance.delete(`/admin/forum/topics/${id}`);
+      navigate('/forum');
+    } catch (err) {
+      console.error('Failed to delete topic:', err);
+    }
+  };
+
+  const handleDeleteReply = async (replyId) => {
+    if (!window.confirm('Are you sure you want to delete this reply?')) return;
+    
+    try {
+      await axiosInstance.delete(`/admin/forum/replies/${replyId}`);
+      setReplies(replies.filter(reply => reply.id !== replyId));
+    } catch (err) {
+      console.error('Failed to delete reply:', err);
+    }
+  };
+
   if (loading) {
     return <LoadingMessage>Loading...</LoadingMessage>;
   }
@@ -267,12 +316,23 @@ const ForumTopic = () => {
       <BackLink to="/forum">Back to forum</BackLink>
       
       <TopicHeader>
-        <TopicTitle>{topic.title}</TopicTitle>
-        <TopicMeta>
-          By {topic.username}
-          {topic.user_region && ` (${topic.user_region})`}
-          {' '}on {new Date(topic.created).toLocaleDateString()}
-        </TopicMeta>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <TopicTitle>{topic.title}</TopicTitle>
+            <TopicMeta>
+              By {topic.username}
+              {topic.user_region && ` (${topic.user_region})`}
+              {' '}on {new Date(topic.created).toLocaleDateString()}
+            </TopicMeta>
+          </div>
+          {user && user.is_admin && (
+            <AdminControls>
+              <AdminButton onClick={handleDeleteTopic}>
+                Delete Topic
+              </AdminButton>
+            </AdminControls>
+          )}
+        </div>
         {topic.description && (
           <TopicDescription>{topic.description}</TopicDescription>
         )}
@@ -282,11 +342,20 @@ const ForumTopic = () => {
         <h3>Replies ({replies.length})</h3>
         {replies.map(reply => (
           <ReplyCard key={reply.id}>
-            <ReplyMeta>
-              By {reply.username}
-              {reply.user_region && ` (${reply.user_region})`}
-              {' '}on {new Date(reply.created).toLocaleDateString()}
-            </ReplyMeta>
+            <ReplyHeader>
+              <ReplyMeta>
+                By {reply.username}
+                {reply.user_region && ` (${reply.user_region})`}
+                {' '}on {new Date(reply.created).toLocaleDateString()}
+              </ReplyMeta>
+              {user && user.is_admin && (
+                <AdminControls>
+                  <AdminButton onClick={() => handleDeleteReply(reply.id)}>
+                    Delete
+                  </AdminButton>
+                </AdminControls>
+              )}
+            </ReplyHeader>
             <ReplyContent>{reply.content}</ReplyContent>
             <ReplyFooter>
               <div></div>

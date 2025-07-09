@@ -14,20 +14,42 @@ from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer
 from google.oauth2 import id_token
 from google.auth.transport import requests
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+import redis
 
-# At the top of the file, add debug logging for environment loading
+# At the top of the file, add environment validation
 load_dotenv()
-print("Environment variables loaded")
-print(f"Database URL exists: {'DATABASE_URL' in os.environ}")
+
+# Validate critical environment variables
+required_env_vars = [
+    'DATABASE_URL',
+    'SECRET_KEY',
+    'MAIL_USERNAME',
+    'MAIL_PASSWORD',
+    'FRONTEND_URL',
+    'GOOGLE_CLIENT_ID'
+]
+
+missing_vars = [var for var in required_env_vars if not os.environ.get(var)]
+if missing_vars:
+    raise RuntimeError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
+print("Environment variables validated successfully")
 
 # Add Google Client ID constant
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
 
 app = Flask(__name__)
-CORS(app, origins=[
-    'https://wikitricks.netlify.app',  # Your Netlify domain
-    'http://localhost:3000'  # Local development
-], supports_credentials=True)
+CORS(app, 
+    origins=[
+        'https://wikitricks.netlify.app',
+        'http://localhost:3000' if os.environ.get('FLASK_ENV') == 'development' else None
+    ],
+    supports_credentials=True,
+    methods=['GET', 'POST', 'PUT', 'DELETE'],
+    allow_headers=['Content-Type', 'Authorization']
+)
 bcrypt = Bcrypt(app)
 
 # Database Configuration
@@ -72,6 +94,16 @@ with app.app_context():
     except Exception as e:
         print(f"Database connection failed: {e}")
 
+# Add to required_env_vars if you want to make Redis mandatory
+redis_url = os.environ.get('REDIS_URL', 'memory://')  # fallback to memory for dev
+
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri=redis_url
+)
+
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -82,6 +114,27 @@ def token_required(f):
             if token.startswith('Bearer '):
                 token = token[7:]
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            return f(*args, **kwargs)
+        except:
+            return jsonify({'error': 'Invalid token'}), 401
+    return decorated
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({'error': 'Token missing'}), 401
+        try:
+            if token.startswith('Bearer '):
+                token = token[7:]
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            
+            # Check if user is admin
+            user = User.query.get(data['user_id'])
+            if not user or not user.is_admin:
+                return jsonify({'error': 'Admin access required'}), 403
+                
             return f(*args, **kwargs)
         except:
             return jsonify({'error': 'Invalid token'}), 401
@@ -182,6 +235,7 @@ def get_trick(trick_id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/register', methods=['POST'])
+@limiter.limit("5 per minute")
 def register():
     data = request.json
     if not data or not all(k in data for k in ['email', 'username', 'password']):
@@ -237,6 +291,7 @@ def verify_email(token):
         return jsonify({'error': 'Invalid or expired verification link'}), 400
 
 @app.route('/login', methods=['POST'])
+@limiter.limit("10 per minute")
 def login():
     data = request.json
     if not data or not data.get('email') or not data.get('password'):
@@ -795,6 +850,7 @@ def get_reply_upvote_status(reply_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/forgot-password', methods=['POST'])
+@limiter.limit("3 per minute")
 def forgot_password():
     data = request.json
     if not data or not data.get('email'):
@@ -860,3 +916,130 @@ If you didn't request this password reset, please ignore this email.
     except Exception as e:
         print(f"Failed to send password reset email: {str(e)}")
         return False
+
+# Admin routes
+@app.route('/admin/tricks/<int:trick_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_trick(trick_id):
+    try:
+        trick = Trick.query.get_or_404(trick_id)
+        
+        # Delete associated comments and upvotes
+        Comment.query.filter_by(trick_id=trick_id).delete()
+        TrickUpvote.query.filter_by(trick_id=trick_id).delete()
+        
+        db.session.delete(trick)
+        db.session.commit()
+        
+        return jsonify({'message': 'Trick deleted successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/comments/<int:comment_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_comment(comment_id):
+    try:
+        comment = Comment.query.get_or_404(comment_id)
+        db.session.delete(comment)
+        db.session.commit()
+        
+        return jsonify({'message': 'Comment deleted successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/forum/topics/<int:topic_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_forum_topic(topic_id):
+    try:
+        topic = ForumTopic.query.get_or_404(topic_id)
+        
+        # Delete associated replies and upvotes
+        reply_ids = [reply.id for reply in topic.replies]
+        for reply_id in reply_ids:
+            ReplyUpvote.query.filter_by(reply_id=reply_id).delete()
+        
+        ForumReply.query.filter_by(topic_id=topic_id).delete()
+        db.session.delete(topic)
+        db.session.commit()
+        
+        return jsonify({'message': 'Forum topic deleted successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/forum/replies/<int:reply_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_forum_reply(reply_id):
+    try:
+        reply = ForumReply.query.get_or_404(reply_id)
+        
+        # Delete associated upvotes
+        ReplyUpvote.query.filter_by(reply_id=reply_id).delete()
+        
+        db.session.delete(reply)
+        db.session.commit()
+        
+        return jsonify({'message': 'Forum reply deleted successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/users/<int:user_id>/toggle-admin', methods=['POST'])
+@admin_required
+def toggle_admin_status(user_id):
+    try:
+        user = User.query.get_or_404(user_id)
+        user.is_admin = not user.is_admin
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Admin status {"granted" if user.is_admin else "revoked"} for user {user.username}',
+            'is_admin': user.is_admin
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/dashboard', methods=['GET'])
+@admin_required
+def admin_dashboard():
+    try:
+        # Get statistics
+        total_users = User.query.count()
+        total_tricks = Trick.query.count()
+        total_topics = ForumTopic.query.count()
+        total_comments = Comment.query.count()
+        total_replies = ForumReply.query.count()
+        
+        # Get recent activity
+        recent_tricks = Trick.query.order_by(Trick.created.desc()).limit(5).all()
+        recent_topics = ForumTopic.query.order_by(ForumTopic.created.desc()).limit(5).all()
+        recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+        
+        return jsonify({
+            'stats': {
+                'total_users': total_users,
+                'total_tricks': total_tricks,
+                'total_topics': total_topics,
+                'total_comments': total_comments,
+                'total_replies': total_replies
+            },
+            'recent_activity': {
+                'tricks': [trick.to_dict() for trick in recent_tricks],
+                'topics': [topic.to_dict() for topic in recent_topics],
+                'users': [user.to_dict() for user in recent_users]
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)

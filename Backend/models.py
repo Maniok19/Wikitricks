@@ -41,6 +41,7 @@ class User(db.Model):
     verification_token = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     google_id = db.Column(db.String(100), unique=True, nullable=True)
+    is_admin = db.Column(db.Boolean, default=False)  # Add this line
 
     def to_dict(self):
         return {
@@ -49,7 +50,8 @@ class User(db.Model):
             'username': self.username,
             'region': self.region,
             'is_verified': self.is_verified,
-            'google_id': self.google_id is not None
+            'google_id': self.google_id is not None,
+            'is_admin': self.is_admin
         }
 
 # Add after existing models

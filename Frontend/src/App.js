@@ -20,6 +20,7 @@ import TricksPage from './pages/TricksPage';
 import Leaderboards from './pages/Leaderboards';
 import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
+import AdminDashboard from './components/AdminDashboard';
 
 const AppContent = () => {
   const { isDarkMode } = useTheme();
@@ -33,7 +34,7 @@ const AppContent = () => {
           <main>
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/tricks" element={<TricksPage />} /> {/* Add this route */}
+              <Route path="/tricks" element={<TricksPage />} />
               <Route path="/trick/:id" element={<TrickDetails />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -48,6 +49,7 @@ const AppContent = () => {
               <Route path="/leaderboards" element={<Leaderboards />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password/:token" element={<ResetPassword />} />
+              <Route path="/admin" element={<AdminDashboard />} />
             </Routes>
           </main>
         </div>
@@ -66,7 +68,7 @@ function App() {
             <Header />
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/tricks" element={<TricksPage />} /> {/* Add this route */}
+              <Route path="/tricks" element={<TricksPage />} />
               <Route path="/trick/:id" element={<TrickDetails />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -81,6 +83,7 @@ function App() {
               <Route path="/leaderboards" element={<Leaderboards />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password/:token" element={<ResetPassword />} />
+              <Route path="/admin" element={<AdminDashboard />} />
             </Routes>
           </div>
         </Router>
