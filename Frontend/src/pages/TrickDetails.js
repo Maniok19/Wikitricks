@@ -9,8 +9,7 @@ import {
   LoadingMessage, 
   ErrorMessage 
 } from '../components/shared/StyledComponents';
-import { useAuth } from '../context/AuthContext';
-
+import { useAuth } from '../contexts/AuthContext';
 const TrickDetailsWrapper = styled(PageWrapper)`
   max-width: 800px;
 `;
