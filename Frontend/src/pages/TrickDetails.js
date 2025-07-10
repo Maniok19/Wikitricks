@@ -119,14 +119,14 @@ const CommentsSection = styled.section`
   }
 `;
 
-const AdminControls = styled.div`
+const UserControls = styled.div`
   display: flex;
   gap: 0.5rem;
   justify-content: center;
   margin-top: 1rem;
 `;
 
-const AdminButton = styled.button`
+const DeleteButton = styled.button`
   background: var(--btn-danger);
   color: white;
   border: none;
@@ -192,7 +192,12 @@ const TrickDetails = () => {
     if (!window.confirm('Are you sure you want to delete this trick?')) return;
     
     try {
-      await axiosInstance.delete(`/admin/tricks/${id}`);
+      // Use the regular delete endpoint for own tricks, admin endpoint for admin actions
+      const endpoint = user && user.is_admin && trick.user_id !== user.id 
+        ? `/admin/tricks/${id}` 
+        : `/tricks/${id}`;
+      
+      await axiosInstance.delete(endpoint);
       navigate('/tricks');
     } catch (err) {
       console.error('Failed to delete trick:', err);
@@ -203,6 +208,12 @@ const TrickDetails = () => {
   const handleCommentDelete = (commentId) => {
     setComments(comments.filter(comment => comment.id !== commentId));
   };
+
+  // Check if user can delete this trick
+  const canDeleteTrick = user && (
+    user.is_admin || 
+    (trick && trick.user_id === user.id)
+  );
 
   if (loading) {
     return <LoadingMessage>Loading trick details...</LoadingMessage>;
@@ -250,12 +261,12 @@ const TrickDetails = () => {
         )}
       </TrickMeta>
 
-      {user && user.is_admin && (
-        <AdminControls>
-          <AdminButton onClick={handleDeleteTrick}>
+      {canDeleteTrick && (
+        <UserControls>
+          <DeleteButton onClick={handleDeleteTrick}>
             Delete Trick
-          </AdminButton>
-        </AdminControls>
+          </DeleteButton>
+        </UserControls>
       )}
 
       <CommentsSection>
