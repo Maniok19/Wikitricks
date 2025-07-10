@@ -4,6 +4,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 import os
+import re
 from flask import Flask, request, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
@@ -22,6 +23,7 @@ from google.auth.transport import requests
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import redis
+import logging
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # Environment Configuration & Validation
@@ -123,18 +125,17 @@ GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 def token_required(f):
-    """Decorator to require valid JWT token for protected routes"""
+    """Decorator to require valid JWT token for protected routes and inject user_data"""
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization')
-        if not token:
-            return jsonify({'error': 'Token missing'}), 401
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Token missing or malformed'}), 401
+        token = auth_header[7:]
         try:
-            if token.startswith('Bearer '):
-                token = token[7:]
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-            return f(*args, **kwargs)
-        except:
+            user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            return f(*args, user_data=user_data, **kwargs)
+        except Exception:
             return jsonify({'error': 'Invalid token'}), 401
     return decorated
 
@@ -210,7 +211,7 @@ If you didn't request this password reset, please ignore this email.
 
 @app.route('/create-trick', methods=['POST'])
 @token_required
-def create_trick():
+def create_trick(user_data):
     """Create a new skateboarding trick with video and details"""
     if not request.is_json:
         return jsonify({"error": "Content-Type must be application/json"}), 400
@@ -222,9 +223,6 @@ def create_trick():
         return jsonify({"error": "Missing required fields"}), 400
 
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-
         new_trick = Trick(
             title=data['name'],
             description=data['description'],
@@ -241,7 +239,7 @@ def create_trick():
         }), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/tricks', methods=['GET'])
 def get_tricks():
@@ -253,20 +251,12 @@ def get_tricks():
         for trick in tricks:
             trick_data = trick.to_dict()
             video_url = trick.video_url
-            
-            # Convert YouTube URLs to embed format
-            if 'youtube.com' in video_url or 'youtu.be' in video_url:
-                if 'v=' in video_url:
-                    video_id = video_url.split('v=')[1].split('&')[0]
-                else:
-                    video_id = video_url.split('/')[-1]
-                trick_data['video_url'] = f'https://www.youtube.com/embed/{video_id}'
-                
+            trick_data['video_url'] = get_youtube_embed_url(video_url)
             trick_list.append(trick_data)
             
         return jsonify(trick_list)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/tricks/<int:trick_id>', methods=['GET'])
 def get_trick(trick_id):
@@ -274,47 +264,32 @@ def get_trick(trick_id):
     try:
         trick = Trick.query.get_or_404(trick_id)
         trick_data = trick.to_dict()
-        
         video_url = trick.video_url
-        if 'youtube.com' in video_url or 'youtu.be' in video_url:
-            if 'v=' in video_url:
-                video_id = video_url.split('v=')[1].split('&')[0]
-            else:
-                video_id = video_url.split('/')[-1]
-            trick_data['video_url'] = f'https://www.youtube.com/embed/{video_id}'
-            
+        trick_data['video_url'] = get_youtube_embed_url(video_url)
         return jsonify(trick_data)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/tricks/<int:trick_id>', methods=['DELETE'])
 @token_required
-def delete_own_trick(trick_id):
+def delete_own_trick(trick_id, user_data):
     """Allow users to delete their own tricks or admins to delete any trick"""
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         user_id = user_data['user_id']
-        
         trick = Trick.query.get_or_404(trick_id)
-        
         # Verify ownership or admin privileges
         user = User.query.get(user_id)
         if trick.user_id != user_id and not user.is_admin:
             return jsonify({'error': 'Permission denied'}), 403
-        
         # Clean up related data before deletion
         Comment.query.filter_by(trick_id=trick_id).delete()
         TrickUpvote.query.filter_by(trick_id=trick_id).delete()
-        
         db.session.delete(trick)
         db.session.commit()
-        
         return jsonify({'message': 'Trick deleted successfully'}), 200
-        
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/tricks/search', methods=['GET'])
 def search_tricks():
@@ -330,20 +305,12 @@ def search_tricks():
         for trick in tricks:
             trick_data = trick.to_dict()
             video_url = trick.video_url
-            
-            # Process YouTube URLs for embedding
-            if 'youtube.com' in video_url or 'youtu.be' in video_url:
-                if 'v=' in video_url:
-                    video_id = video_url.split('v=')[1].split('&')[0]
-                else:
-                    video_id = video_url.split('/')[-1]
-                trick_data['video_url'] = f'https://www.youtube.com/embed/{video_id}'
-            
+            trick_data['video_url'] = get_youtube_embed_url(video_url)
             trick_list.append(trick_data)
             
         return jsonify(trick_list)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return handle_internal_error(e)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # User Authentication & Account Management
@@ -501,18 +468,13 @@ def google_auth():
 
 @app.route('/user/profile', methods=['PUT'])
 @token_required
-def update_profile():
+def update_profile(user_data):
     """Update user profile information"""
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         user = User.query.get(user_data['user_id'])
-
         if not user:
             return jsonify({'error': 'User not found'}), 404
-
         data = request.json
-
         # Require password check for non-Google users
         if not user.google_id:
             if not bcrypt.check_password_hash(user.password, data.get('currentPassword', '')):
@@ -530,44 +492,34 @@ def update_profile():
                     return jsonify({'error': 'Google authentication failed'}), 401
             except Exception:
                 return jsonify({'error': 'Invalid Google token'}), 401
-
         # Update username if provided and different
         if data.get('username') and data['username'] != user.username:
             if User.query.filter_by(username=data['username']).first():
                 return jsonify({'error': 'Ce pseudo est déjà utilisé'}), 409
             user.username = data['username']
-
         # Update region if provided
         if 'region' in data:
             user.region = data['region']
-
         # Update password if provided (only for non-Google users)
         if data.get('newPassword') and not user.google_id:
             user.password = bcrypt.generate_password_hash(data['newPassword']).decode('utf-8')
-
         db.session.commit()
         return jsonify(user.to_dict()), 200
-
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/user/me', methods=['GET'])
 @token_required
-def get_current_user():
+def get_current_user(user_data):
     """Get current authenticated user information"""
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         user = User.query.get(user_data['user_id'])
-        
         if not user:
             return jsonify({'error': 'User not found'}), 404
-            
         return jsonify(user.to_dict()), 200
-        
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/forgot-password', methods=['POST'])
 @limiter.limit("3 per minute")
@@ -589,7 +541,7 @@ def forgot_password():
         return jsonify({'message': 'If this email exists, you will receive a password reset link'}), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/reset-password/<token>', methods=['POST'])
 def reset_password(token):
@@ -612,7 +564,7 @@ def reset_password(token):
         return jsonify({'message': 'Password reset successfully'}), 200
         
     except Exception as e:
-        return jsonify({'error': 'Invalid or expired reset link'}), 400
+        return handle_internal_error(e)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # Comment System
@@ -625,20 +577,16 @@ def get_comments(trick_id):
         comments = Comment.query.filter_by(trick_id=trick_id).order_by(Comment.created.desc()).all()
         return jsonify([comment.to_dict() for comment in comments])
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/tricks/<int:trick_id>/comments', methods=['POST'])
 @token_required
-def create_comment(trick_id):
+def create_comment(trick_id, user_data):
     """Create a new comment on a trick"""
     data = request.json
     if not data or 'content' not in data:
         return jsonify({'error': 'Missing content'}), 400
-        
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-        
         comment = Comment(
             content=data['content'],
             trick_id=trick_id,
@@ -646,11 +594,10 @@ def create_comment(trick_id):
         )
         db.session.add(comment)
         db.session.commit()
-        
         return jsonify(comment.to_dict()), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # Forum System
@@ -663,20 +610,16 @@ def get_forum_topics():
         topics = ForumTopic.query.order_by(ForumTopic.is_pinned.desc(), ForumTopic.created.desc()).all()
         return jsonify([topic.to_dict() for topic in topics])
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/forum/topics', methods=['POST'])
 @token_required
-def create_forum_topic():
+def create_forum_topic(user_data):
     """Create a new forum topic"""
     data = request.json
     if not data or not data.get('title'):
         return jsonify({'error': 'Title is required'}), 400
-        
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-        
         topic = ForumTopic(
             title=data['title'],
             description=data.get('description', ''),
@@ -684,11 +627,10 @@ def create_forum_topic():
         )
         db.session.add(topic)
         db.session.commit()
-        
         return jsonify(topic.to_dict()), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/forum/topics/<int:topic_id>', methods=['GET'])
 def get_forum_topic(topic_id):
@@ -697,7 +639,7 @@ def get_forum_topic(topic_id):
         topic = ForumTopic.query.get_or_404(topic_id)
         return jsonify(topic.to_dict())
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/forum/topics/<int:topic_id>/replies', methods=['GET'])
 def get_forum_replies(topic_id):
@@ -706,23 +648,18 @@ def get_forum_replies(topic_id):
         replies = ForumReply.query.filter_by(topic_id=topic_id).order_by(ForumReply.created.asc()).all()
         return jsonify([reply.to_dict() for reply in replies])
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/forum/topics/<int:topic_id>/replies', methods=['POST'])
 @token_required
-def create_forum_reply(topic_id):
+def create_forum_reply(topic_id, user_data):
     """Create a new reply to a forum topic"""
     data = request.json
     if not data or not data.get('content'):
         return jsonify({'error': 'Content is required'}), 400
-        
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-        
         # Verify topic exists
         topic = ForumTopic.query.get_or_404(topic_id)
-        
         reply = ForumReply(
             content=data['content'],
             topic_id=topic_id,
@@ -730,11 +667,10 @@ def create_forum_reply(topic_id):
         )
         db.session.add(reply)
         db.session.commit()
-        
         return jsonify(reply.to_dict()), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/forum/search', methods=['GET'])
 def search_forum():
@@ -748,7 +684,7 @@ def search_forum():
         
         return jsonify([topic.to_dict() for topic in topics])
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return handle_internal_error(e)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # Skatepark Management
@@ -783,7 +719,7 @@ def create_skatepark():
         }), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/skateparks', methods=['GET'])
 def get_skateparks():
@@ -792,7 +728,7 @@ def get_skateparks():
         skateparks = Skatepark.query.order_by(Skatepark.created_at.desc()).all()
         return jsonify([skatepark.to_dict() for skatepark in skateparks])
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # Voting System
@@ -800,21 +736,16 @@ def get_skateparks():
 
 @app.route('/tricks/<int:trick_id>/upvote', methods=['POST'])
 @token_required
-def upvote_trick(trick_id):
+def upvote_trick(trick_id, user_data):
     """Toggle upvote on a trick"""
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         user_id = user_data['user_id']
-        
         trick = Trick.query.get_or_404(trick_id)
-        
         # Check if user already upvoted
         existing_upvote = TrickUpvote.query.filter_by(
             user_id=user_id, 
             trick_id=trick_id
         ).first()
-        
         if existing_upvote:
             # Remove upvote (toggle off)
             db.session.delete(existing_upvote)
@@ -834,51 +765,40 @@ def upvote_trick(trick_id):
                 'upvoted': True,
                 'upvote_count': len(trick.upvotes)
             })
-            
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/tricks/<int:trick_id>/upvote-status', methods=['GET'])
 @token_required
-def get_trick_upvote_status(trick_id):
+def get_trick_upvote_status(trick_id, user_data):
     """Get upvote status for a trick"""
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         user_id = user_data['user_id']
-        
         trick = Trick.query.get_or_404(trick_id)
         upvote = TrickUpvote.query.filter_by(
             user_id=user_id, 
             trick_id=trick_id
         ).first()
-        
         return jsonify({
             'upvoted': upvote is not None,
             'upvote_count': len(trick.upvotes)
         })
-        
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/replies/<int:reply_id>/upvote', methods=['POST'])
 @token_required
-def upvote_reply(reply_id):
+def upvote_reply(reply_id, user_data):
     """Toggle upvote on a forum reply"""
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         user_id = user_data['user_id']
-        
         reply = ForumReply.query.get_or_404(reply_id)
-        
         # Check if user already upvoted
         existing_upvote = ReplyUpvote.query.filter_by(
             user_id=user_id, 
             reply_id=reply_id
         ).first()
-        
         if existing_upvote:
             # Remove upvote (toggle off)
             db.session.delete(existing_upvote)
@@ -898,33 +818,27 @@ def upvote_reply(reply_id):
                 'upvoted': True,
                 'upvote_count': len(reply.upvotes)
             })
-            
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/replies/<int:reply_id>/upvote-status', methods=['GET'])
 @token_required
-def get_reply_upvote_status(reply_id):
+def get_reply_upvote_status(reply_id, user_data):
     """Get upvote status for a forum reply"""
     try:
-        token = request.headers.get('Authorization').split()[1]
-        user_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         user_id = user_data['user_id']
-        
         reply = ForumReply.query.get_or_404(reply_id)
         upvote = ReplyUpvote.query.filter_by(
             user_id=user_id, 
             reply_id=reply_id
         ).first()
-        
         return jsonify({
             'upvoted': upvote is not None,
             'upvote_count': len(reply.upvotes)
         })
-        
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # Leaderboards & Statistics
@@ -1015,7 +929,7 @@ def get_leaderboards():
 
     except Exception as e:
         print(f"Leaderboards error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # Admin Management Routes
@@ -1054,7 +968,7 @@ def admin_dashboard():
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/admin/tricks/<int:trick_id>', methods=['DELETE'])
 @admin_required
@@ -1074,7 +988,7 @@ def admin_delete_trick(trick_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/admin/comments/<int:comment_id>', methods=['DELETE'])
 @admin_required
@@ -1089,7 +1003,7 @@ def admin_delete_comment(comment_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/admin/forum/topics/<int:topic_id>', methods=['DELETE'])
 @admin_required
@@ -1111,7 +1025,7 @@ def admin_delete_forum_topic(topic_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/admin/forum/replies/<int:reply_id>', methods=['DELETE'])
 @admin_required
@@ -1130,7 +1044,7 @@ def admin_delete_forum_reply(reply_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 @app.route('/admin/users/<int:user_id>/toggle-admin', methods=['POST'])
 @admin_required
@@ -1148,11 +1062,15 @@ def toggle_admin_status(user_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return handle_internal_error(e)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # System Health & Utilities
 # ═══════════════════════════════════════════════════════════════════════════════════════
+
+def handle_internal_error(e, message="An internal server error occurred."):
+    logging.exception(e)
+    return jsonify({'error': message}), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -1165,9 +1083,10 @@ def health_check():
             'database': 'connected'
         }), 200
     except Exception as e:
+        logging.exception(e)
         return jsonify({
             'status': 'unhealthy',
-            'database': str(e)
+            'database': 'Database connection error.'
         }), 500
 
 @app.cli.command("init-db")
@@ -1175,6 +1094,19 @@ def init_db():
     """Initialize the database tables"""
     db.create_all()
     print('✓ Database initialized!')
+
+def get_youtube_embed_url(url):
+    """
+    Extracts the YouTube video ID and returns the embed URL.
+    Supports various YouTube URL formats.
+    """
+    regex = (
+        r'(?:youtube\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/)([^"&?/ ]{11})'
+    )
+    match = re.search(regex, url)
+    if match:
+        return f'https://www.youtube.com/embed/{match.group(1)}'
+    return url
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # Application Entry Point
