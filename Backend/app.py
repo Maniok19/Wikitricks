@@ -24,6 +24,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import redis
 import logging
+import secrets
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # Environment Configuration & Validation
@@ -119,6 +120,48 @@ limiter = Limiter(
 
 # Google OAuth configuration
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+
+# Token expiration configuration
+ACCESS_TOKEN_EXPIRES_MINUTES = int(os.environ.get('ACCESS_TOKEN_EXPIRES_MINUTES', 15))
+REFRESH_TOKEN_EXPIRES_DAYS = int(os.environ.get('REFRESH_TOKEN_EXPIRES_DAYS', 7))
+REFRESH_TOKEN_SECRET = os.environ.get('REFRESH_TOKEN_SECRET', 'refresh-secret-key')
+
+# Use Redis for refresh token storage if available, else fallback to dict
+try:
+    refresh_redis = redis.StrictRedis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+    refresh_redis.ping()
+    def store_refresh_token(token, user_id, expires):
+        refresh_redis.setex(token, expires, user_id)
+    def get_refresh_token_user(token):
+        user_id = refresh_redis.get(token)
+        return int(user_id) if user_id else None
+    def delete_refresh_token(token):
+        refresh_redis.delete(token)
+except Exception:
+    refresh_tokens = {}
+    def store_refresh_token(token, user_id, expires):
+        refresh_tokens[token] = (user_id, datetime.datetime.utcnow() + datetime.timedelta(seconds=expires))
+    def get_refresh_token_user(token):
+        data = refresh_tokens.get(token)
+        if not data:
+            return None
+        user_id, expiry = data
+        if datetime.datetime.utcnow() > expiry:
+            del refresh_tokens[token]
+            return None
+        return user_id
+    def delete_refresh_token(token):
+        refresh_tokens.pop(token, None)
+
+# Helper to generate tokens
+def generate_access_token(user_id):
+    return jwt.encode({
+        'user_id': user_id,
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRES_MINUTES)
+    }, app.config['SECRET_KEY'], algorithm='HS256')
+
+def generate_refresh_token():
+    return secrets.token_urlsafe(64)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # Authentication & Authorization Decorators
@@ -377,33 +420,68 @@ def verify_email(token):
 @app.route('/login', methods=['POST'])
 @limiter.limit("10 per minute")
 def login():
-    """Authenticate user and return JWT token"""
+    """Authenticate user and return JWT token and refresh token"""
     data = request.json
     if not data or not data.get('email') or not data.get('password'):
         return jsonify({'error': 'Missing credentials'}), 400
 
     try:
         user = User.query.filter_by(email=data['email']).first()
-        
         if not user:
             return jsonify({'error': 'Invalid credentials'}), 401
-
         if not user.is_verified:
             return jsonify({'error': 'Please verify your email before logging in'}), 403
-            
         if bcrypt.check_password_hash(user.password, data['password']):
-            token = jwt.encode({
-                'user_id': user.id,
-                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-            }, app.config['SECRET_KEY'], algorithm='HS256')
-            
-            return jsonify({
-                'token': token,
+            access_token = generate_access_token(user.id)
+            refresh_token = generate_refresh_token()
+            store_refresh_token(refresh_token, user.id, REFRESH_TOKEN_EXPIRES_DAYS * 24 * 3600)
+            response = jsonify({
+                'token': access_token,
                 'user': user.to_dict()
             })
+            response.set_cookie(
+                'refresh_token', refresh_token,
+                httponly=True, samesite='Strict', secure=not app.debug,
+                max_age=REFRESH_TOKEN_EXPIRES_DAYS * 24 * 3600
+            )
+            return response
         return jsonify({'error': 'Invalid credentials'}), 401
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/refresh-token', methods=['POST'])
+def refresh_token():
+    """Issue a new access token using a valid refresh token"""
+    refresh_token = request.cookies.get('refresh_token')
+    if not refresh_token:
+        return jsonify({'error': 'Refresh token missing'}), 401
+    user_id = get_refresh_token_user(refresh_token)
+    if not user_id:
+        return jsonify({'error': 'Invalid or expired refresh token'}), 401
+    # Optionally rotate refresh token for extra security
+    new_refresh_token = generate_refresh_token()
+    store_refresh_token(new_refresh_token, user_id, REFRESH_TOKEN_EXPIRES_DAYS * 24 * 3600)
+    delete_refresh_token(refresh_token)
+    access_token = generate_access_token(user_id)
+    response = jsonify({'token': access_token})
+    response.set_cookie(
+        'refresh_token', new_refresh_token,
+        httponly=True, samesite='Strict', secure=not app.debug,
+        max_age=REFRESH_TOKEN_EXPIRES_DAYS * 24 * 3600
+    )
+    return response
+
+# Optional: Add logout endpoint to revoke refresh token
+@app.route('/logout', methods=['POST'])
+@token_required
+def logout(user_data):
+    """Logout user by deleting refresh token"""
+    refresh_token = request.cookies.get('refresh_token')
+    if refresh_token:
+        delete_refresh_token(refresh_token)
+    response = jsonify({'message': 'Logged out'})
+    response.delete_cookie('refresh_token')
+    return response
 
 @app.route('/auth/google', methods=['POST'])
 def google_auth():
@@ -411,56 +489,45 @@ def google_auth():
     try:
         data = request.json
         token = data.get('token')
-        
         if not token:
             return jsonify({'error': 'Token is required'}), 400
-        
-        # Verify Google token
         idinfo = id_token.verify_oauth2_token(
             token, requests.Request(), GOOGLE_CLIENT_ID
         )
-        
         email = idinfo.get('email')
         name = idinfo.get('name')
         google_id = idinfo.get('sub')
-        
         if not email:
             return jsonify({'error': 'Email not provided by Google'}), 400
-        
-        # Find or create user
         user = User.query.filter_by(email=email).first()
-        
         if user:
-            # Update existing user with Google ID
             if not user.google_id:
                 user.google_id = google_id
                 db.session.commit()
         else:
-            # Create new Google user
-            import secrets
             dummy_password = bcrypt.generate_password_hash(secrets.token_urlsafe(32)).decode('utf-8')
-            
             user = User(
                 email=email,
                 username=name or email.split('@')[0],
                 google_id=google_id,
                 password=dummy_password,
-                is_verified=True  # Google users are pre-verified
+                is_verified=True
             )
             db.session.add(user)
             db.session.commit()
-        
-        # Generate JWT token
-        jwt_token = jwt.encode({
-            'user_id': user.id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-        }, app.config['SECRET_KEY'], algorithm='HS256')
-        
-        return jsonify({
-            'token': jwt_token,
+        access_token = generate_access_token(user.id)
+        refresh_token = generate_refresh_token()
+        store_refresh_token(refresh_token, user.id, REFRESH_TOKEN_EXPIRES_DAYS * 24 * 3600)
+        response = jsonify({
+            'token': access_token,
             'user': user.to_dict()
         })
-        
+        response.set_cookie(
+            'refresh_token', refresh_token,
+            httponly=True, samesite='Strict', secure=not app.debug,
+            max_age=REFRESH_TOKEN_EXPIRES_DAYS * 24 * 3600
+        )
+        return response
     except ValueError as e:
         return jsonify({'error': 'Invalid Google token'}), 401
     except Exception as e:
