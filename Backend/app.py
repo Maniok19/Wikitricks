@@ -512,10 +512,24 @@ def update_profile():
             return jsonify({'error': 'User not found'}), 404
 
         data = request.json
-        
-        # Verify current password
-        if not bcrypt.check_password_hash(user.password, data['currentPassword']):
-            return jsonify({'error': 'Mot de passe actuel incorrect'}), 401
+
+        # Require password check for non-Google users
+        if not user.google_id:
+            if not bcrypt.check_password_hash(user.password, data.get('currentPassword', '')):
+                return jsonify({'error': 'Mot de passe actuel incorrect'}), 401
+        else:
+            # For Google users, require Google ID token verification for profile changes
+            google_token = data.get('googleToken')
+            if not google_token:
+                return jsonify({'error': 'Google authentication required for profile update'}), 401
+            try:
+                idinfo = id_token.verify_oauth2_token(
+                    google_token, requests.Request(), GOOGLE_CLIENT_ID
+                )
+                if idinfo.get('sub') != user.google_id or idinfo.get('email') != user.email:
+                    return jsonify({'error': 'Google authentication failed'}), 401
+            except Exception:
+                return jsonify({'error': 'Invalid Google token'}), 401
 
         # Update username if provided and different
         if data.get('username') and data['username'] != user.username:
@@ -527,8 +541,8 @@ def update_profile():
         if 'region' in data:
             user.region = data['region']
 
-        # Update password if provided
-        if data.get('newPassword'):
+        # Update password if provided (only for non-Google users)
+        if data.get('newPassword') and not user.google_id:
             user.password = bcrypt.generate_password_hash(data['newPassword']).decode('utf-8')
 
         db.session.commit()

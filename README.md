@@ -15,6 +15,7 @@ WikiTricks is a skateboarding community platform where users can share tricks, f
   - [Database Scripts](#database-scripts)
 - [Deployment](#deployment)
 - [Contributing](#contributing)
+- [Screenshots](#screenshots)
 - [License](#license)
 
 ---
@@ -30,6 +31,11 @@ WikiTricks offers a variety of features to enhance the skateboarding experience:
 - **User Profiles**: Manage your account, view your contributions, and customize your profile.
 - **Interactive Community**: Connect with other skaters, share knowledge, and grow together.
 - **Mobile-Friendly Design**: Optimized for use on both desktop and mobile devices.
+- **Admin Dashboard**: Admin users can view platform statistics, recent activity, and manage (delete) tricks, topics, replies, and comments.
+- **Comment Moderation**: Admins can delete inappropriate comments directly from the forum or trick pages.
+- **Google Authentication**: Users can register and log in using their Google accounts.
+- **Profile Security Settings**: Users can update their passwords and manage security settings.
+- **Dark Mode**: Enjoy a visually comfortable experience with dark mode support.
 
 ---
 
@@ -137,8 +143,6 @@ We welcome contributions! Please follow these steps:
 5. Open a pull request.
 
 ---
-
-## Screenshots
 
 ## Screenshots
 
