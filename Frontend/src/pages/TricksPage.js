@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import axiosInstance from '../utils/axios';
 import SearchBar from '../components/SearchBar';
 import TrickList from '../components/TrickList';
+import TrickCard from '../components/TrickCard'; // Add this import
 import { PageWrapper, PageTitle, LoadingMessage, ErrorMessage, Button, Card } from '../components/shared/StyledComponents';
 
 const TricksWrapper = styled(PageWrapper)`
