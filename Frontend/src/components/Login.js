@@ -114,11 +114,8 @@ const Login = () => {
             />
           </FormGroup>
 
-          <Button 
-            type="submit" 
-            disabled={loading}
-            style={{ width: '100%' }}
-          >
+          <Button type="submit" disabled={loading} style={{ width: '100%' }}>
+            {loading && <span className="spinner" aria-hidden="true" />}
             {loading ? 'LOGGING IN...' : 'LOGIN'}
           </Button>
           
