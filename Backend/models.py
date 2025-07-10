@@ -3,8 +3,8 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
-# Update the Trick class
 class Trick(db.Model):
+    """Represents a skateboarding trick posted by a user."""
     __tablename__ = 'tricks'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -13,9 +13,9 @@ class Trick(db.Model):
     video_url = db.Column(db.String(255), nullable=False)
     difficulty = db.Column(db.String(50), nullable=False, default='beginner')
     created = db.Column(db.DateTime, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Add this line
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
-    user = db.relationship('User', backref='tricks')  # Add this line
+    user = db.relationship('User', backref='tricks')
 
     def to_dict(self):
         return {
@@ -26,10 +26,11 @@ class Trick(db.Model):
             'difficulty': self.difficulty,
             'created': self.created.isoformat(),
             'upvote_count': len(self.upvotes),
-            'user_id': self.user_id  # Add this line
+            'user_id': self.user_id
         }
 
 class User(db.Model):
+    """Represents a registered user."""
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -41,7 +42,7 @@ class User(db.Model):
     verification_token = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     google_id = db.Column(db.String(100), unique=True, nullable=True)
-    is_admin = db.Column(db.Boolean, default=False)  # Add this line
+    is_admin = db.Column(db.Boolean, default=False)
 
     def to_dict(self):
         return {
@@ -54,9 +55,8 @@ class User(db.Model):
             'is_admin': self.is_admin
         }
 
-# Add after existing models
-
 class Comment(db.Model):
+    """Represents a comment on a trick."""
     __tablename__ = 'comments'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -73,14 +73,15 @@ class Comment(db.Model):
             'id': self.id,
             'content': self.content,
             'created': self.created.isoformat(),
-            'created_at': self.created.isoformat(),  # Add this for consistency
+            'created_at': self.created.isoformat(),
             'trick_id': self.trick_id,
             'user_email': self.user.email,
-            'username': self.user.username,  # Add this line
-            'region': self.user.region       # Add this line too
+            'username': self.user.username,
+            'region': self.user.region
         }
 
 class ForumTopic(db.Model):
+    """Represents a discussion topic in the forum."""
     __tablename__ = 'forum_topics'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -106,6 +107,7 @@ class ForumTopic(db.Model):
         }
 
 class ForumReply(db.Model):
+    """Represents a reply to a forum topic."""
     __tablename__ = 'forum_replies'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -126,10 +128,11 @@ class ForumReply(db.Model):
             'user_id': self.user_id,
             'username': self.user.username,
             'user_region': self.user.region,
-            'upvote_count': len(self.upvotes)  # Add this line
+            'upvote_count': len(self.upvotes)
         }
 
 class Skatepark(db.Model):
+    """Represents a skatepark location."""
     __tablename__ = 'skateparks'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -141,7 +144,6 @@ class Skatepark(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     
-    # Relationship to user who created the skatepark
     creator = db.relationship('User', backref='created_skateparks')
     
     def to_dict(self):
@@ -157,6 +159,7 @@ class Skatepark(db.Model):
         }
 
 class TrickUpvote(db.Model):
+    """Tracks upvotes for tricks, ensuring one upvote per user per trick."""
     __tablename__ = 'trick_upvotes'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -164,13 +167,13 @@ class TrickUpvote(db.Model):
     trick_id = db.Column(db.Integer, db.ForeignKey('tricks.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Ensure a user can only upvote a trick once
     __table_args__ = (db.UniqueConstraint('user_id', 'trick_id', name='unique_trick_upvote'),)
     
     user = db.relationship('User', backref='trick_upvotes')
     trick = db.relationship('Trick', backref='upvotes')
 
 class ReplyUpvote(db.Model):
+    """Tracks upvotes for forum replies, ensuring one upvote per user per reply."""
     __tablename__ = 'reply_upvotes'
     
     id = db.Column(db.Integer, primary_key=True)
@@ -178,7 +181,6 @@ class ReplyUpvote(db.Model):
     reply_id = db.Column(db.Integer, db.ForeignKey('forum_replies.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Ensure a user can only upvote a reply once
     __table_args__ = (db.UniqueConstraint('user_id', 'reply_id', name='unique_reply_upvote'),)
     
     user = db.relationship('User', backref='reply_upvotes')
