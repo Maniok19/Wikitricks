@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import ThemeToggle from './ThemeToggle';
 
+// Main header container with dynamic background and neon effects for dark mode
 const HeaderWrapper = styled.header`
   background: ${props => props.isDarkMode ? `
     linear-gradient(135deg, var(--background) 0%, var(--background-secondary) 100%)
@@ -20,7 +21,7 @@ const HeaderWrapper = styled.header`
   width: 100%;
   max-width: 100vw;
   box-sizing: border-box;
-  overflow: hidden; /* Add this to contain the neon line */
+  overflow: hidden;
 
   ${props => props.isDarkMode ? `
     border-bottom: 2px solid var(--btn-primary);
@@ -56,8 +57,8 @@ const HeaderWrapper = styled.header`
         var(--btn-primary)
       );
       animation: neonFlow 3s ease-in-out infinite;
-      width: 100%; /* Ensure it doesn't exceed container width */
-      box-sizing: border-box; /* Include any potential borders in width calculation */
+      width: 100%;
+      box-sizing: border-box;
     }
 
     @keyframes neonFlow {
@@ -72,10 +73,11 @@ const HeaderWrapper = styled.header`
     padding: 1rem;
     width: 100%;
     max-width: 100vw;
-    overflow: hidden; /* Ensure overflow is hidden on mobile too */
+    overflow: hidden;
   }
 `;
 
+// Top section: logo, title, theme toggle, and mobile menu button
 const HeaderTop = styled.div`
   display: flex;
   align-items: center;
@@ -87,23 +89,25 @@ const HeaderTop = styled.div`
 
   @media (max-width: 768px) {
     margin-bottom: 0;
-    gap: 0.5rem; /* Reduce gap on mobile */
-    padding: 0 0.5rem; /* Add padding to prevent cutoff */
+    gap: 0.5rem;
+    padding: 0 0.5rem;
   }
 `;
 
+// Logo and title container
 const LogoSection = styled.div`
   display: flex;
   align-items: center;
   gap: 1.5rem;
   
   @media (max-width: 768px) {
-    gap: 0.5rem; /* Reduce gap between logo and title */
-    flex-shrink: 1; /* Allow shrinking if needed */
-    min-width: 0; /* Allow text truncation if needed */
+    gap: 0.5rem;
+    flex-shrink: 1;
+    min-width: 0;
   }
 `;
 
+// Logo image with neon effect in dark mode
 const Logo = styled.img`
   height: 60px;
   width: auto;
@@ -133,6 +137,7 @@ const Logo = styled.img`
   }
 `;
 
+// Site title with neon text-shadow in dark mode
 const Title = styled.h1`
   margin: 0;
   font-size: 2.5rem;
@@ -169,23 +174,19 @@ const Title = styled.h1`
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    
-    /* Reduce neon effects on mobile to prevent square background */
     ${props => props.isDarkMode ? `
       text-shadow: 
         0 0 8px var(--btn-primary),
         0 0 12px var(--btn-primary);
-      transform: none; /* Remove rotation on mobile */
-      
+      transform: none;
       &:hover {
-        transform: none; /* Remove hover effects on mobile */
+        transform: none;
         text-shadow: 
           0 0 8px var(--btn-primary),
           0 0 12px var(--btn-primary);
       }
     ` : `
       text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
-      
       &:hover {
         transform: none;
       }
@@ -193,6 +194,7 @@ const Title = styled.h1`
   }
 `;
 
+// Mobile menu toggle button (hamburger)
 const MobileMenuToggle = styled.button`
   display: none;
   background: transparent;
@@ -203,11 +205,10 @@ const MobileMenuToggle = styled.button`
   cursor: pointer;
   transition: all 0.3s ease;
   z-index: 1001;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0;
 
   ${props => props.isDarkMode ? `
     box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
-    
     &:hover {
       border-color: var(--secondary);
       box-shadow: 0 0 15px var(--secondary);
@@ -221,12 +222,13 @@ const MobileMenuToggle = styled.button`
 
   @media (max-width: 768px) {
     display: block;
-    padding: 0.4rem; /* Slightly smaller padding */
-    min-width: 40px; /* Ensure minimum width */
-    height: 40px; /* Fixed height */
+    padding: 0.4rem;
+    min-width: 40px;
+    height: 40px;
   }
 `;
 
+// Hamburger icon for mobile menu
 const HamburgerIcon = styled.div`
   width: 24px;
   height: 18px;
@@ -264,6 +266,7 @@ const HamburgerIcon = styled.div`
   }
 `;
 
+// Navigation container, switches to full-screen overlay on mobile
 const Nav = styled.nav`
   position: relative;
   z-index: 2;
@@ -287,13 +290,13 @@ const Nav = styled.nav`
     justify-content: center;
     align-items: center;
     padding: 2rem;
-    
     ${props => props.isDarkMode && `
       box-shadow: 0 0 50px rgba(0, 255, 255, 0.3);
     `}
   }
 `;
 
+// List for navigation items
 const NavList = styled.ul`
   list-style-type: none;
   padding: 0;
@@ -312,6 +315,7 @@ const NavList = styled.ul`
   }
 `;
 
+// Main navigation links (left side)
 const MainNavItems = styled.div`
   display: flex;
   gap: 0.5rem;
@@ -325,6 +329,7 @@ const MainNavItems = styled.div`
   }
 `;
 
+// Auth navigation links (right side)
 const AuthNavItems = styled.div`
   display: flex;
   gap: 0.5rem;
@@ -341,6 +346,7 @@ const AuthNavItems = styled.div`
   }
 `;
 
+// Individual navigation item with hover effects
 const NavItem = styled.li`
   position: relative;
 
@@ -409,7 +415,6 @@ const NavItem = styled.li`
       margin-right: 0;
       width: 200px;
       text-align: center;
-      
       &:hover {
         transform: scale(1.05);
       }
@@ -417,6 +422,7 @@ const NavItem = styled.li`
   }
 `;
 
+// Button style for logout and similar actions
 const Button = styled.button`
   background: transparent;
   border: 2px solid ${props => props.isDarkMode ? 'var(--btn-danger)' : 'rgba(255, 255, 255, 0.8)'};
@@ -437,7 +443,7 @@ const Button = styled.button`
   text-decoration: none;
   width: auto;
   min-width: 120px;
-  min-height: 48px; /* Ensures consistent height */
+  min-height: 48px;
   text-align: center;
   box-sizing: border-box;
 
@@ -488,15 +494,15 @@ const Button = styled.button`
     font-size: 1.2rem;
     margin-right: 0;
     width: 200px;
-    min-height: 56px; /* Match mobile nav item height */
+    min-height: 56px;
     text-align: center;
-    
     &:hover {
       transform: scale(1.05);
     }
   }
 `;
 
+// Controls for theme toggle and hamburger on mobile
 const MobileTopControls = styled.div`
   display: flex;
   justify-content: space-between;
@@ -509,6 +515,7 @@ const MobileTopControls = styled.div`
   }
 `;
 
+// Container for theme toggle and hamburger icon
 const MobileControls = styled.div`
   display: flex;
   align-items: center;
@@ -516,23 +523,27 @@ const MobileControls = styled.div`
   flex-shrink: 0;
   
   @media (max-width: 768px) {
-    gap: 0.5rem; /* Reduce gap on mobile */
+    gap: 0.5rem;
   }
 `;
 
+// Header component: responsive navigation bar with theme and auth controls
 const Header = () => {
   const { user, logout } = useAuth();
   const { isDarkMode } = useTheme();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Toggle mobile menu open/close
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
+  // Close mobile menu (used on navigation)
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
   };
 
+  // Handle logout and close menu
   const handleLogout = (e) => {
     e.preventDefault();
     logout();
@@ -548,7 +559,6 @@ const Header = () => {
             <Title isDarkMode={isDarkMode}>WIKITRICKS</Title>
           </Link>
         </LogoSection>
-        
         <MobileControls>
           <ThemeToggle />
           <MobileMenuToggle onClick={toggleMobileMenu} isDarkMode={isDarkMode}>
@@ -560,7 +570,6 @@ const Header = () => {
           </MobileMenuToggle>
         </MobileControls>
       </HeaderTop>
-      
       <Nav isOpen={isMobileMenuOpen} isDarkMode={isDarkMode}>
         <MobileTopControls>
           <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '1rem' }} onClick={closeMobileMenu}>
@@ -575,7 +584,6 @@ const Header = () => {
             </HamburgerIcon>
           </MobileMenuToggle>
         </MobileTopControls>
-
         <NavList>
           <MainNavItems>
             <NavItem isDarkMode={isDarkMode}><Link to="/" onClick={closeMobileMenu}>HOME</Link></NavItem>
@@ -594,10 +602,14 @@ const Header = () => {
               </a>
             </NavItem>
           </MainNavItems>
-          
           <AuthNavItems>
             {user ? (
               <>
+                {user.is_admin && (
+                  <NavItem isDarkMode={isDarkMode}>
+                    <Link to="/admin" onClick={closeMobileMenu}>ADMIN</Link>
+                  </NavItem>
+                )}
                 <NavItem isDarkMode={isDarkMode}><Link to="/profile" onClick={closeMobileMenu}>PROFILE</Link></NavItem>
                 <NavItem isDarkMode={isDarkMode}>
                   <a href="#" onClick={handleLogout}>LOGOUT</a>

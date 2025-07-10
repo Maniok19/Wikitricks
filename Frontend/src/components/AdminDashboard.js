@@ -11,6 +11,7 @@ import {
 } from './shared/StyledComponents';
 import styled from 'styled-components';
 
+// Layout for dashboard statistics cards
 const DashboardGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -18,6 +19,7 @@ const DashboardGrid = styled.div`
   margin-bottom: 2rem;
 `;
 
+// Card styling for statistics
 const StatCard = styled(Card)`
   text-align: center;
   
@@ -42,6 +44,7 @@ const StatCard = styled(Card)`
   }
 `;
 
+// Section wrapper for activity lists
 const ActivitySection = styled.div`
   margin-bottom: 2rem;
   
@@ -52,12 +55,14 @@ const ActivitySection = styled.div`
   }
 `;
 
+// List container for recent activities
 const ActivityList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 `;
 
+// Item styling for each activity entry
 const ActivityItem = styled.div`
   display: flex;
   justify-content: space-between;
@@ -68,6 +73,7 @@ const ActivityItem = styled.div`
   border: 1px solid var(--border-light);
 `;
 
+// Styled delete button for admin actions
 const DeleteButton = styled(Button)`
   background: var(--btn-danger);
   color: white;
@@ -79,16 +85,22 @@ const DeleteButton = styled(Button)`
   }
 `;
 
+/**
+ * AdminDashboard component
+ * Displays admin-only statistics and recent activity with delete controls.
+ */
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Fetch dashboard data on mount
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
+  // Retrieve dashboard statistics and recent activity from API
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
@@ -101,6 +113,7 @@ const AdminDashboard = () => {
     }
   };
 
+  // Handle deletion of tricks, comments, topics, or replies
   const handleDelete = async (type, id) => {
     if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
     
@@ -113,12 +126,13 @@ const AdminDashboard = () => {
       };
       
       await axiosInstance.delete(endpoints[type]);
-      fetchDashboardData(); // Refresh data
+      fetchDashboardData(); // Refresh data after deletion
     } catch (err) {
       setError(err.response?.data?.error || `Failed to delete ${type}`);
     }
   };
 
+  // Restrict access to admins only
   if (!user || !user.is_admin) {
     return (
       <PageWrapper>
@@ -127,15 +141,18 @@ const AdminDashboard = () => {
     );
   }
 
+  // Show loading or error states
   if (loading) return <LoadingMessage>Loading admin dashboard...</LoadingMessage>;
   if (error) return <ErrorMessage>{error}</ErrorMessage>;
 
+  // Main dashboard UI
   return (
     <PageWrapper>
       <PageTitle>Admin Dashboard</PageTitle>
       
       {dashboardData && (
         <>
+          {/* Statistics cards */}
           <DashboardGrid>
             <StatCard>
               <div className="stat-number">{dashboardData.stats.total_users}</div>
@@ -158,6 +175,7 @@ const AdminDashboard = () => {
             </StatCard>
           </DashboardGrid>
 
+          {/* Recent tricks activity */}
           <ActivitySection>
             <h3>Recent Tricks</h3>
             <ActivityList>
@@ -177,6 +195,7 @@ const AdminDashboard = () => {
             </ActivityList>
           </ActivitySection>
 
+          {/* Recent forum topics activity */}
           <ActivitySection>
             <h3>Recent Forum Topics</h3>
             <ActivityList>
