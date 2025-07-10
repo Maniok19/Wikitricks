@@ -122,12 +122,9 @@ const Register = () => {
               onChange={handleChange}
               placeholder="Enter your email"
               required
-              aria-invalid={!!fieldErrors.email}
-              aria-describedby={fieldErrors.email ? "email-error" : undefined}
             />
-            {fieldErrors.email && (
-              <ErrorMessage id="email-error">{fieldErrors.email}</ErrorMessage>
-            )}
+            {/* Optionally show a general error */}
+            {error && <ErrorMessage>{error}</ErrorMessage>}
           </FormGroup>
 
           <FormGroup>
