@@ -209,11 +209,20 @@ const TrickDetails = () => {
     setComments(comments.filter(comment => comment.id !== commentId));
   };
 
-  // Check if user can delete this trick
+  // Check if user can delete this trick - admin can delete any trick
   const canDeleteTrick = user && (
     user.is_admin || 
     (trick && trick.user_id === user.id)
   );
+
+  // Add debugging
+  console.log('Delete button debug:', {
+    user: user,
+    isAdmin: user?.is_admin,
+    trickUserId: trick?.user_id,
+    userIdMatch: trick?.user_id === user?.id,
+    canDelete: canDeleteTrick
+  });
 
   if (loading) {
     return <LoadingMessage>Loading trick details...</LoadingMessage>;
